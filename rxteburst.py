@@ -1,7 +1,11 @@
 
-import numpy as np
 from __future__ import with_statement
+import numpy as np
 from collections import defaultdict
+
+import generaltools
+import burst
+import rxte
 
 #### READ ASCII DATA FROM FILE #############
 #
@@ -30,32 +34,29 @@ def conversion(filename):
 
 
 
-def read_rxte_data(filename):
+def read_burst_times(filename):
+    """
+    Read burst start and end times from file.
+    First column: start times in MET
+    second column> end times in MET
+    """
+    data = conversion(filename)
+    tstart = np.array([float(t) for t in data[0]])
+    tend = np.array([float(t) for t in data[1]])
+    blen = tend - tstart
 
-    f = open(filename, 'r')
-    times, barytimes, pcus, channels = [], [], [], []
+    return tstart, blen
 
-    counter = 0
-    for i,line in enumerate(f):
-        line_split = line.split()
-        if line.startswith("#") and counter == 0:
-            try:
-                t0 = np.float(line_split[-1])
-            except ValueError:
-                raise Exception("No t0 found! Aborting ...")
 
-            counter += 1
 
-        else:
-            times.append(np.float(line_split[0]))
-            barytimes.append(np.float(line_split[1]))
-            pcus.append(np.float(line_split[4]))
-            channels.append(np.float(line_split[5]))
+def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
 
-    times = np.array(times)
-    barytimes = np.array(barytimes)
-    pcus = np.array(pcus)
-    channels = np.array(channels)
+    data = rxte.RXTEData(times=None, channels=None, datafile=datafile, npcus=None, ra=None, dec=None,
+                 emid = None, emiddir = "./", bary=bary)
 
-    min_pcu = np.min(pcus)
-    max_pcu = np.max(pcus)
+    tstart, blen = read_burst_times(bursttimefile)
+
+    for i,(s,l) in enumerate(zip(tstart, blen)):
+        b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=4096.0, norm="leahy")
+        b.saveburst(fileroot + "_" + str(tstart)[:7] + ".dat")
+    return
