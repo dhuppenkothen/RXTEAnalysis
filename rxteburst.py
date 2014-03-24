@@ -1,38 +1,88 @@
 
-from __future__ import with_statement
+#from __future__ import with_statement
 import numpy as np
-from collections import defaultdict
+import fnmatch
+import os
+import argparse
+import scipy.special
+import scipy.optimize
+import scipy
+import glob
 
-import generaltools
-import burst
+from pylab import *
+rc("font", size=20, family="serif", serif="Computer Sans")
+rc("text", usetex=True)
+
+
+
+try:
+    import burst
+    print("Burst sucessfully imported!")
+except ImportError:
+    print("Module Burst not found!")
 import rxte
 
-#### READ ASCII DATA FROM FILE #############
-#
-# This is a useful little function that reads
-# data from file and stores it in a dictionary
-# with as many lists as the file had columns.
-# The dictionary has the following architecture
-# (e.g. for a file with three columns):
-#
-# {'0':[1st column data], '1':[2nd column data], '2':[3rd column data]}
-#
-#
-# NOTE: Each element of the lists is still a *STRING*, because
-# the function doesn't make an assumption about what type of data
-# you're trying to read! Numbers need to be converted before using them!
-#
-def conversion(filename):
-    f=open(filename, 'r')
-    output_lists=defaultdict(list)
-    for line in f:
-        if not line.startswith('#'):
-             line=[value for value in line.split()]
-             for col, data in enumerate(line):
-                 output_lists[col].append(data)
-    return output_lists
+
+def straight(x, a,b):
+    return a*x + b
+
+class PoissonPosterior(object):
+
+    def __init__(self, times, counts, model):
+        self.times = times
+        self.counts = counts
+        self.model = model
+        self.delta = self.times[1] - self.times[0]
+        self.countrate = self.counts/self.delta
 
 
+    def logprior(self, theta):
+        return 1.0
+
+    def _log_likelihood(self, lambdas, data):
+
+        llike = -np.sum(lambdas) + np.sum(data*np.log(lambdas))\
+                -np.sum(scipy.special.gammaln(data + 1))
+
+        return llike
+
+    def loglikelihood(self, theta):
+
+        lambdas = self.model(*theta)
+        return self._log_likelihood(lambdas, self.countrate)
+
+
+    def logposterior(self, theta):
+        return self.logprior(theta) + self.loglikelihood(theta)
+
+
+    def __call__(self, theta):
+        return self.logposterior(theta)
+
+def fit_bkg(times, counts, model, theta_init):
+
+    lpost = PoissonPosterior(times, counts, model)
+
+    scipy_version = scipy.__version__
+    if scipy_version >= "0.11.0":
+        res = scipy.optimize.minimize(-lpost, theta_init, method="Nelder-Mead")
+
+
+    return
+
+
+def interpolate_bkg(segment1, segment2, searchbin, model=straight):
+
+    return
+
+
+def search_filenames_recursively(testdir, testexpression):
+    matches = []
+    for root, dirnames, filenames in os.walk(testdir):
+        for filename in fnmatch.filter(filenames, testexpression):
+            matches.append(os.path.join(root, filename))
+
+    return matches
 
 def read_burst_times(filename):
     """
@@ -40,7 +90,7 @@ def read_burst_times(filename):
     First column: start times in MET
     second column> end times in MET
     """
-    data = conversion(filename)
+    data = rxte.conversion(filename)
     tstart = np.array([float(t) for t in data[0]])
     tend = np.array([float(t) for t in data[1]])
     blen = tend - tstart
@@ -51,12 +101,115 @@ def read_burst_times(filename):
 
 def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
 
+    len_datafile = len(datafile.split("/")[-1])
+
     data = rxte.RXTEData(times=None, channels=None, datafile=datafile, npcus=None, ra=None, dec=None,
-                 emid = None, emiddir = "./", bary=bary)
+                 emid = None, emiddir=datafile[:-len_datafile], bary=bary)
 
     tstart, blen = read_burst_times(bursttimefile)
 
     for i,(s,l) in enumerate(zip(tstart, blen)):
-        b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=4096.0, norm="leahy")
-        b.saveburst(fileroot + "_" + str(tstart)[:7] + ".dat")
+        #print("First photon: " + str(data.photons[0].unbary))
+        #print("Last photon: " + str(data.photons[-1].unbary))
+        #print("start time: " + str(s-data.t0))
+        if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
+            try:
+                b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=4096.0, norm="leahy",
+                                   pcus = data.pcus)
+                b.save_burst(fileroot + "_" + str(s) + "_burst.dat")
+            except rxte.ZeroCountsException:
+                print("No counts in burst!")
+                continue
+
+        else:
+            continue
     return
+
+
+def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.dat"):
+
+    filenames = search_filenames_recursively(datadir, data_expression)
+    for f in filenames:
+        fsplit = f.split("/")
+        froot = fsplit[1]
+        flen = len(fsplit[-1])
+        fdir = f[:-flen]
+        print("froot: " + str(froot))
+        make_bursts(f, bursttimefile, fileroot=fdir+froot)
+
+    return
+
+def plot_lightcurves(datadir="./"):
+
+    filenames = glob.glob(datadir + "*burst.dat")
+    for f in filenames:
+        b = rxte.getpickle(f)
+        bintimes, bincounts = rxte.rebin_lightcurve(b.lc.time, b.lc.countrate, 10)
+        plot(bintimes, bincounts/np.max(b.pcus), lw=2, color='black', linestyle='steps-mid')
+        xlabel("Time since trigger [s]")
+        ylabel("Count rate [cts/s]")
+        fsplit = f.split("_")
+        title(fsplit[0] + ", tstart = " + fsplit[1] + ", pcus = " + str(np.max(b.pcus)))
+        fnew = fsplit[0] + "_" + fsplit[1] + "_lc.png"
+        savefig(fnew, format="png")
+        close()
+
+    return
+
+
+def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="test"):
+
+    filenames = glob.glob(datadir + froot + "*burst.dat")
+
+    for f in filenames:
+        b = rxte.getpickle(f)
+        fsplit = f.split("/")
+        namestr = fsplit[-1][:-10]
+        b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim)
+
+    return
+
+def main():
+    if extract_bursts:
+        print("Running all_bursts ...")
+        assert clargs.bfile, "No file with burst start times!"
+        all_bursts(bursttimefile=clargs.bfile)
+    if plot_lcs:
+        plot_lightcurves()
+
+    if analysis:
+        bayesian_analysis(nwalker=clargs.nwalker, niter=clargs.niter, nsim=clargs.nsim, datadir=clargs.datadir,
+                          froot=clargs.froot)
+
+    print("Done!")
+    return
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Make burst files out of RXTE data!')
+    parser.add_argument('-b', '--bfile', action='store', dest='bfile', required=False,
+                         help='File with burst start times')
+    parser.add_argument("-d", "--data-dir", action="store", dest="datadir", required=False, default="./",
+                        help="Directory where data is located")
+
+    parser.add_argument("-e", "--extract-bursts", action="store_true", dest='extract',
+                        help="Would you like to extract bursts from data?")
+    parser.add_argument("-l", "--plot-lightcurves", action="store_true", dest='plot_lc',
+                        help="Would you like to plot light curves to file?")
+    parser.add_argument("-a", "--analysis", action="store_true", dest="analysis",
+                        help="Would you like to run the Bayesian PSD analysis on a bunch of files?")
+
+    parser.add_argument("-w", "--nwalker", action="store", dest="nwalker", required=False, default=500, type=int,
+                        help="Number of walkers for MCMC run")
+    parser.add_argument("-i", "--niter", action="store", dest="niter", required=False, default=200, type=int,
+                        help="Number of iterations for MCMC run")
+    parser.add_argument("-s", "--nsim", action="store", dest="nsim", required=False, default=1000, type=int,
+                        help="Number of periodograms to simulate from posterior distribution")
+    parser.add_argument("-f", "--froot", action="store", dest="froot", default="", required=False,
+                        help="File root that can be specified to run the analysis only on a subset of bursts")
+
+    clargs = parser.parse_args()
+    extract_bursts = clargs.extract
+    plot_lcs = clargs.plot_lc
+    analysis = clargs.analysis
+    main()

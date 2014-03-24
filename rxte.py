@@ -1,10 +1,53 @@
+from __future__ import with_statement
+from collections import defaultdict
 
 import glob
 import numpy as np
+import cPickle as pickle
 
+import burst
 import generaltools
 import lightcurve
 import powerspectrum
+
+def conversion(filename):
+    f=open(filename, 'r')
+    output_lists=defaultdict(list)
+    for line in f:
+        if not line.startswith('#'):
+             line=[value for value in line.split()]
+             for col, data in enumerate(line):
+                 output_lists[col].append(data)
+    return output_lists
+
+def getpickle(picklefile):
+    file = open(picklefile, 'r')
+    procdata = pickle.load(file)
+    return procdata
+
+def rebin_lightcurve(times, counts, n=10):
+
+    nbins = int(len(times)/n)
+    dt = times[1] - times[0]
+    T = times[-1] - times[0] + dt
+    bin_dt = dt*n
+    bintimes = np.arange(nbins)*bin_dt + bin_dt/2.0 + times[0]
+
+    nbins_new = int(len(counts)/n)
+    counts_new = counts[:nbins_new*n]
+    bincounts = np.reshape(np.array(counts_new), (nbins_new, n))
+    bincounts = np.sum(bincounts, axis=1)
+    bincounts = bincounts/np.float(n)
+
+    #bincounts = np.array([np.sum(counts[i*n:i*n+n]) for i in range(nbins)])/np.float(n)
+    #print("len(bintimes): " + str(len(bintimes)))
+    #print("len(bincounts: " + str(len(bincounts)))
+    if len(bintimes) < len(bincounts):
+        bincounts = bincounts[:len(bintimes)]
+
+    return bintimes, bincounts
+
+
 
 class RXTEPhoton(generaltools.Photon, object):
 
@@ -36,7 +79,7 @@ class RXTEPhoton(generaltools.Photon, object):
 class RXTEData(generaltools.Data, object):
 
     def __init__(self, times=None, channels=None, datafile=None, npcus=None, ra=None, dec=None,
-                 emid = None, emiddir = None, bary=True):
+                 emid = None, emiddir = "./", bary=True, pcus=None):
 
         if not ra is None and not dec is None:
             self.ra = ra
@@ -58,8 +101,17 @@ class RXTEData(generaltools.Data, object):
             self.photons = [RXTEPhoton(t,e,emid=self.emid) for t,e in zip(times, channels)]
             self.pcus = npcus
 
-
         return
+
+    def readchannelconv(self, emiddir="./"):
+
+        filename = glob.glob(emiddir + "Energy*")
+        print("filename: " + str(filename))
+        assert len(filename) >= 1, "No energy conversion file present!"
+        filename = filename[0]
+        energydata = conversion(filename)
+        energybins = np.array([float(e) for e in energydata[0]])
+        return energybins
 
     def readrxtedata(self, filename, emid):
 
@@ -133,32 +185,63 @@ class RXTEData(generaltools.Data, object):
 
 class RXTEBurst(burst.Burst, object):
 
-    def __init__(self, bstart, blength, photons, ttrig, bary=True, add_frac=0.2, fnyquist=4096.0, norm="leahy"):
+    def __init__(self, bstart, blength, photons, ttrig, pcus=None, bary=True, add_frac=0.2, fnyquist=4096.0, norm="leahy"):
+
+        print("bstart: " + str(bstart))
+        print("blength: " + str(blength))
 
         self.bst = bstart - add_frac*blength
 
-        self.blen = (1.0+2*add_frac)*blength
+        self.blen = (1.0+2.0*add_frac)*blength
 
         self.bend = self.bst + (1.0+add_frac)*blength
 
         self.ttrig = ttrig
+
+        print("self.bst: " + str(self.bst))
+        print("self.blen: " + str(self.blen))
+        print("self.bend: " + str(self.bend))
+        print("calculated blen: " + str(self.bend - self.bst))
 
         if bary:
             times = np.array([p.unbary for p in photons]) + self.ttrig
         else:
             times = np.array([p.time for p in photons]) + self.ttrig
 
+        #print("times[0]: " + str(times[0]))
+        #print("times[-1]: " + str(times[-1]))
+
         startind = times.searchsorted(self.bst)
         endind = times.searchsorted(self.bend)
 
+        if not pcus is None:
+            if np.size(pcus) > 1:
+                self.pcus = pcus[startind:endind]
+            else:
+                self.pcus = pcus
+
+        print("startind: " + str(startind))
+        print("endind: " + str(endind))
+        print("len photons: " + str(len(photons)))
+
         self.photons = photons[startind:endind]
+        print("len photons: " + str(len(self.photons)))
+        if startind == endind:
+            raise ZeroCountsException(0)
 
         self.times = np.array([p.time for p in self.photons])
+        print("len times: " + str(len(self.times)))
         self.lc = lightcurve.Lightcurve(self.times, timestep=0.5/fnyquist, tseg=self.blen)
         self.ps = powerspectrum.PowerSpectrum(self.lc, norm=norm)
 
         return
 
+
+class ZeroCountsException(Exception):
+
+    def __init__(self, ncounts):
+        self.ncounts = ncounts
+        return
 
 
 
