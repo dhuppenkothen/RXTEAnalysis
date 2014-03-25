@@ -183,6 +183,27 @@ class RXTEData(generaltools.Data, object):
 
 
 
+    def findbursts(self, dt=0.1):
+
+        times = np.array([p.time for p in self.photons])
+        lc = lightcurve.Lightcurve(times, timestep=dt)
+
+        for t,c in zip(lc.times, lc.counts):
+            print("nothing")
+
+        return
+
+
+
+
+def fitsegment(s1, s2, bin_time, bin_counts):
+    print("I am here!")
+    return
+
+
+
+
+
 class RXTEBurst(burst.Burst, object):
 
     def __init__(self, bstart, blength, photons, ttrig, pcus=None, bary=True, add_frac=0.2, fnyquist=4096.0, norm="leahy"):
