@@ -32,9 +32,9 @@ try:
     print("Burst sucessfully imported!")
 except ImportError:
     print("Module Burst not found!")
+
 import rxte
-
-
+import findbursts
 
 
 def search_filenames_recursively(testdir, testexpression):
@@ -44,6 +44,10 @@ def search_filenames_recursively(testdir, testexpression):
             matches.append(os.path.join(root, filename))
 
     return matches
+
+
+
+
 
 def read_burst_times(filename):
     """
@@ -131,6 +135,10 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
     return
 
 def main():
+
+    if clargs.find_bursts:
+        find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot="test")
+
     if extract_bursts:
         print("Running all_bursts ...")
         assert clargs.bfile, "No file with burst start times!"
@@ -145,6 +153,8 @@ def main():
     print("Done!")
     return
 
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Make burst files out of RXTE data!')
@@ -153,10 +163,15 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--data-dir", action="store", dest="datadir", required=False, default="./",
                         help="Directory where data is located")
 
+
+
+
     parser.add_argument("-e", "--extract-bursts", action="store_true", dest='extract',
                         help="Would you like to extract bursts from data?")
     parser.add_argument("-l", "--plot-lightcurves", action="store_true", dest='plot_lc',
                         help="Would you like to plot light curves to file?")
+
+
     parser.add_argument("-a", "--analysis", action="store_true", dest="analysis",
                         help="Would you like to run the Bayesian PSD analysis on a bunch of files?")
 
@@ -166,7 +181,7 @@ if __name__ == "__main__":
                         help="Number of iterations for MCMC run")
     parser.add_argument("-s", "--nsim", action="store", dest="nsim", required=False, default=1000, type=int,
                         help="Number of periodograms to simulate from posterior distribution")
-    parser.add_argument("-f", "--froot", action="store", dest="froot", default="", required=False,
+    parser.add_argument("--fr", "--froot", action="store", dest="froot", default="", required=False,
                         help="File root that can be specified to run the analysis only on a subset of bursts")
 
     clargs = parser.parse_args()

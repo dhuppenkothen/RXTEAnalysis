@@ -89,9 +89,9 @@ def fit_bkg(times, counts, model, theta_init):
     if scipy_version >= "0.11.0":
         res = scipy.optimize.minimize(lpost, theta_init, method="Nelder-Mead", args=(True,))
 
-    if res.success:
-        print("Minimization successful!")
-    else:
+    #if res.success:
+        #print("Minimization successful!")
+    if not res.success:
         print("Minimization NOT successful!")
         print(res.message)
 
@@ -208,7 +208,7 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
         #print("searchbin_time: " + str(searchbin_time))
         #print("searchbin_counts: " + str(searchbin_counts))
 
-        if searchbin_time < bin_distance+tseg:
+        if searchbin_time < times[0]+bin_distance+tseg:
             #print("Only segment after bin to search taken into account")
             s1_start = lcsmall.time.searchsorted(searchbin_time+bin_distance)
             s1_end = lcsmall.time.searchsorted(searchbin_time+bin_distance+tseg)
@@ -222,7 +222,6 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             #print("start time: " + str(s1_times[0]))
             #print("end time: " + str(s1_times[-1]))
 
-
             if len(s1_counts) < 50:
                 pvals_all.append(2.0)
                 continue
@@ -231,7 +230,7 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             s2_times = None
             s2_counts = None
 
-        elif bin_distance+tseg <= searchbin_time <= times[-1]-(bin_distance+tseg):
+        elif times[0]+bin_distance+tseg <= searchbin_time <= times[-1]-(bin_distance+tseg):
             #print("Both segments taken into account")
             s1_start = lcsmall.time.searchsorted(searchbin_time-(bin_distance+tseg))
             s1_end = lcsmall.time.searchsorted(searchbin_time-(bin_distance))
@@ -313,7 +312,7 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
 
         pval = compare_to_poisson(searchbin_model*lc.res, searchbin_counts)
 
-        print("The p-value for this bin is: p = " + str(pval))
+        #print("The p-value for this bin is: p = " + str(pval))
         if pval < sig_threshold:
             significant_all.append({"time":searchbin_time, "counts":searchbin_counts, "countrate":searchbin_countrate,
                                     "pval":pval})
@@ -330,7 +329,7 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
 
 
 
-def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None, froot="test"):
+def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None):
 
     ## read out all p-values
     pvals_all = np.array(pvals_dict["pvals"])
@@ -389,8 +388,6 @@ def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstra
         else:
             all_info.append(info)
 
-    edges = np.array([p.burst_edges for p in all_info])
-
     return all_info
 
 
@@ -431,4 +428,31 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
     return info
 
 
+
+def extract_bursts(times, t0=None, p0=0.05, nbootstrap=512, sig_threshold=1.0e-7, dt=0.1, dt_small=0.01,
+                   tseg=5.0, bin_distance=3.0, froot="test"):
+
+
+    pval_dict, sig_all = search_data(times, dt, dt_small, tseg, bin_distance, straight, None,
+                sig_threshold)
+
+
+    all_info = burst_parameters(times, pval_dict, sig_threshold, p0, nbootstrap, froot)
+
+    f = open(froot + "burst_times.dat", "w")
+
+    edges = np.array([p.burst_edges for p in all_info])
+    if not t0 is None:
+        edges += t0
+        f.write("#Start time \t End time (both in MET)\n")
+
+    else:
+        f.write("#Start time \t End time (in time since first photon)\n")
+
+    for e in edges:
+        f.write(str(e[0]) + "\t" + str(e[1]) + "\n")
+
+    f.close()
+
+    return
 
