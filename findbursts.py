@@ -50,8 +50,8 @@ class PoissonPosterior(object):
 
     def _log_likelihood(self, lambdas, data):
 
-        #print("len(lambdas): " + str(len(lambdas)))
-        #print("len(data): " + str(len(data)))
+        #print("lambdas: " + str(lambdas))
+        #print("data: " + str(data))
 
         llike = -np.sum(lambdas) + np.sum(data*np.log(lambdas))\
                 -np.sum(scipy.special.gammaln(data + 1))
@@ -60,6 +60,7 @@ class PoissonPosterior(object):
 
     def loglikelihood(self, theta):
 
+        #print("theta: " + str(theta))
         #print("len(times): " + str(len(self.times)))
 
         lambdas = self.model(self.times, *theta)
@@ -291,9 +292,15 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
         else:
             plotlc_new = None
 
-        searchbin_model1, popt1, exit_status1, success1, searchbin_model2, popt2, exit_status2, success2,= \
-            interpolate_bkg(s1_times, s1_counts, searchbin_time, searchbin_counts, s2_times=s2_times,
-                            s2_counts=s2_counts, plotlc=plotlc_new, model=model)
+        try:
+            searchbin_model1, popt1, exit_status1, success1, searchbin_model2, popt2, exit_status2, success2,= \
+                interpolate_bkg(s1_times, s1_counts, searchbin_time, searchbin_counts, s2_times=s2_times,
+                                s2_counts=s2_counts, plotlc=plotlc_new, model=model)
+
+        except FloatingPointError:
+            print("Fitting failed! Leaving out bin.")
+            pvals_all.append(2.0)
+            continue
 
         #print("searchbin_model1: " + str(searchbin_model1))
         #print("searchbin_model2: " + str(searchbin_model2))
@@ -404,8 +411,26 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
     edges.append(info.redges[-1])
     edges = np.array(edges)
 
-    burst_edges = [edges[1]-0.02, edges[-2]+0.02]
-    info.burst_edges = burst_edges
+    bkgmean = (info.bsrates[0] + info.bsrates[-1])/2.0
+    rv = scipy.stats.norm(bkgmean, np.sqrt(bkgmean))
+
+    pvals = [1.0 - rv.cdf(b) for b in info.bsrates]
+
+    burst_ind = [1 if p < 0.01 else 0 for p in pvals]
+    burst_diff = [burst_ind[i+1] - b  for i,b in enumerate(burst_ind[:-1])]
+
+    burst_start, burst_end = [], []
+
+    for i,b in enumerate(burst_diff):
+        if b == 1:
+            burst_start.append(info.ledges[i+1])
+        elif b == -1:
+            burst_end.append(info.redges[i])
+
+
+
+    #burst_edges = [edges[1]-0.02, edges[-2]+0.02]
+    info.burst_edges = zip(burst_start, burst_end)
 
     if not plotlc is None:
 
@@ -419,9 +444,14 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
         plot(lc.time, np.zeros(len(lc.time)), lw=2, color='red', label="Bayesian Blocks representation")
         max_cr = np.max(lc.countrate)+0.1*np.max(lc.countrate)
         axis([min_time, max_time, 0.2, max_cr])
-        vlines(edges[1]-0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed', label="Burst edges")
-        vlines(edges[-2]+0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed')
-        legend()
+        for i,b in enumerate(info.burst_edges):
+            vlines(b[0]-0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed', label="Burst edges, burst " + str(i))
+            vlines(b[1]+0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed')
+        legend(prop={"size":16})
+        if len(info.bsrates) <= 2:
+            plt.title("Not a burst")
+        else:
+            plt.title("It's a burst!")
         savefig(plotlc + "_bblocks.png", format="png")
         close()
 
@@ -449,8 +479,12 @@ def extract_bursts(times, t0=None, p0=0.05, nbootstrap=512, sig_threshold=1.0e-7
     else:
         f.write("#Start time \t End time (in time since first photon)\n")
 
-    for e in edges:
-        f.write(str(e[0]) + "\t" + str(e[1]) + "\n")
+    #edges = np.unique(edges)
+    #print(edges)
+
+    for e_outer in edges:
+        for e in e_outer:
+            f.write(str(e[0]) + "\t" + str(e[1]) + "\n")
 
     f.close()
 

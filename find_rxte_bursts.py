@@ -1,6 +1,9 @@
 
 import argparse
 import findbursts
+import rxte
+
+import numpy as np
 
 
 def find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot="test"):
@@ -11,6 +14,19 @@ def find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot
 
     data = rxte.RXTEData(datafile=datafile, emiddir=datadir, bary=bary)
     times = np.array([p.time for p in data.photons])
+
+    ## prepare data: sometimes, there are photons that have arrival times screwed up, so I exclude them
+    dt = times[1:] - times[:-1]
+    dt_neg = np.where(dt < 0.0)[0]
+
+    if len(dt_neg) >=1:
+        print("I am here!")
+        times = list(times)
+        for i,t in enumerate(dt_neg):
+            print("bla")
+            p = times.pop(t-i)
+
+    times = np.array(times)
 
     findbursts.extract_bursts(times, t0=data.t0, tseg=5.0, bin_distance=1.5, nbootstrap=nbootstrap,
                               sig_threshold=sig_threshold, froot=froot)
@@ -29,9 +45,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Find bursts in RXTE data! Using Bayesian Blocks! Awesomeness!')
 
-
-    parser.add_argument("-b", "--find-bursts", action='store_true', dest='find_bursts', required=False,
-                        help="Do uou want to search for bursts in a data set?")
 
     parser.add_argument("-f", "--filename", action="store", dest="datafile",
                         help="Data file name")
