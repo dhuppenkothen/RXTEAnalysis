@@ -1,19 +1,3 @@
-
-import numpy as np
-import argparse
-import scipy.special
-import scipy.stats
-import scipy.optimize
-import scipy
-import glob
-
-try:
-    import xbblocks
-except ImportError:
-    print("You need to have the xbblocks script from Peter Williams' pwpy repository in "
-          "order to find bursts!")
-
-
 import matplotlib
 matplotlib.use("Agg")
 
@@ -22,8 +6,22 @@ from pylab import *
 rc("font", size=20, family="serif", serif="Computer Sans")
 rc("text", usetex=True)
 
-import lightcurve
 
+import numpy as np
+import scipy.special
+import scipy.stats
+import scipy.optimize
+import scipy
+import cPickle as pickle
+
+try:
+    import xbblocks
+except ImportError:
+    print("You need to have the xbblocks script from Peter Williams' pwpy repository in "
+          "order to find bursts!")
+
+
+import lightcurve
 
 
 counts_cutoff = 600.0
@@ -217,8 +215,13 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             s1_times = lcsmall.time[s1_start:s1_end]
             s1_counts = lcsmall.counts[s1_start:s1_end]
 
-            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff]
-            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff]
+            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff*lcsmall.res]
+            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff*lcsmall.res]
+
+            #print("len(s1_times): " + str(len(s1_times)))
+            #print("len(s1_counts): " + str(len(s1_counts)))
+
+
 
             #print("start time: " + str(s1_times[0]))
             #print("end time: " + str(s1_times[-1]))
@@ -240,8 +243,11 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             s1_counts = lcsmall.counts[s1_start:s1_end]
 
 
-            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff]
-            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff]
+            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff*lcsmall.res]
+            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff*lcsmall.res]
+
+            #print("len(s1_times): " + str(len(s1_times)))
+            #print("len(s1_counts): " + str(len(s1_counts)))
 
 
             s2_start = lcsmall.time.searchsorted(searchbin_time+bin_distance)
@@ -250,8 +256,13 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             s2_times = lcsmall.time[s2_start:s2_end]
             s2_counts = lcsmall.counts[s2_start:s2_end]
 
-            s2_times = [t2 for t2,c2 in zip(s2_times, s2_counts) if 0.0 < c2 < counts_cutoff]
-            s2_counts = [c2 for c2 in s2_counts if 0.0 < c2 < counts_cutoff]
+            s2_times = [t2 for t2,c2 in zip(s2_times, s2_counts) if 0.0 < c2 < counts_cutoff*lcsmall.res]
+            s2_counts = [c2 for c2 in s2_counts if 0.0 < c2 < counts_cutoff*lcsmall.res]
+
+            #print("len(s1_times): " + str(len(s2_times)))
+            #print("len(s1_counts): " + str(len(s2_counts)))
+
+
 
             if len(s2_counts) < 50:
                 s2_times = None
@@ -276,8 +287,12 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
             s1_times = lcsmall.time[s1_start:s1_end]
             s1_counts = lcsmall.counts[s1_start:s1_end]
 
-            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff]
-            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff]
+            s1_times = [t1 for t1,c1 in zip(s1_times, s1_counts) if 0.0 < c1 < counts_cutoff*lcsmall.res]
+            s1_counts = [c1 for c1 in s1_counts if 0.0 < c1 < counts_cutoff*lcsmall.res]
+
+            #print("len(s1_times): " + str(len(s1_times)))
+            #print("len(s1_counts): " + str(len(s1_counts)))
+
 
             if len(s1_counts) < 50:
                 pvals_all.append(2.0)
@@ -285,6 +300,8 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
 
             s2_times =None
             s2_counts = None
+
+        #plotlc = "test"
 
         if not plotlc is None:
             plotlc_new = plotlc + str(i)
@@ -319,6 +336,9 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
 
         pval = compare_to_poisson(searchbin_model*lc.res, searchbin_counts)
 
+        if isnan(pval):
+            pval = 2.0
+
         #print("The p-value for this bin is: p = " + str(pval))
         if pval < sig_threshold:
             significant_all.append({"time":searchbin_time, "counts":searchbin_counts, "countrate":searchbin_countrate,
@@ -336,10 +356,12 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
 
 
 
-def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None):
+def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None):
 
     ## read out all p-values
     pvals_all = np.array(pvals_dict["pvals"])
+
+    #print("pvals_all: " + str(pvals_all))
 
     ## find all p-values below the significance threshold defined by the user
     pvals_sig_ind = np.where(pvals_all <= sig_threshold)[0]
@@ -371,17 +393,29 @@ def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstra
 
     sigtimes = [lc.time[i] for i in pvals_sig_new]
 
-    tseg = 2.0
+    tseg_before = 1.0
+    tseg_after = 4.0
+
+
+    burst_file = open(plotlc + "_burst_times.dat", "w")
+
+    if not t0 is None:
+        burst_file.write("#Start time \t End time (both in MET)\n")
+
+    else:
+        burst_file.write("#Start time \t End time (in time since first photon)\n")
+
 
     all_info = []
 
     for i,s in enumerate(sigtimes):
         print("I am on burst " + str(i))
         ## extract a region 2 seconds before and after each significant time bin
-        si = times.searchsorted(s-tseg)
-        ei = times.searchsorted(s+tseg)
+        si = times.searchsorted(s-tseg_before)
+        ei = times.searchsorted(s+tseg_after)
 
         tnew = times[si:ei]
+        print("tseg: " + str(tnew[-1] - tnew[0]))
 
         if not plotlc is None:
             plotlc_new = plotlc + "_b" + str(i)
@@ -393,7 +427,34 @@ def burst_parameters(times, pvals_dict, sig_threshold=1.0e-8, p0=0.05, nbootstra
             print("This is not a burst!")
             continue
         else:
+
+            edges = np.array(info.burst_edges)
+
+            for j,e in enumerate(edges):
+                data_file = open(plotlc_new + "_n" + str(j) + "_data.dat", "w")
+                si_new = tnew.searchsorted(e[0])
+                ei_new = tnew.searchsorted(e[1])
+                tnew_burst = tnew[si_new:ei_new]
+                if not t0 is None:
+                    tnew_burst = np.array(tnew_burst) + t0
+                    data_file.write("#Time in MET seconds \n")
+                else:
+                    data_file.write("#Time since obs start in seconds\n]")
+                for t in tnew_burst:
+                    data_file.write(str(t) + "\n")
+
+                data_file.close()
+
+            print("edges: " + str(edges))
+            if not t0 is None:
+                edges += t0
+
+            for e in edges:
+                burst_file.write(str(e[0]) + "\t" + str(e[1]) + "\n")
+
             all_info.append(info)
+
+    burst_file.close()
 
     return all_info
 
@@ -411,7 +472,12 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
     edges.append(info.redges[-1])
     edges = np.array(edges)
 
-    bkgmean = (info.bsrates[0] + info.bsrates[-1])/2.0
+
+    ## bins with lowest count rate is probably background,
+    ## so use those as background level
+    sorted_rates = np.sort(info.bsrates)
+    bkgmean = np.mean(sorted_rates[:2])
+
     rv = scipy.stats.norm(bkgmean, np.sqrt(bkgmean))
 
     pvals = [1.0 - rv.cdf(b) for b in info.bsrates]
@@ -421,12 +487,21 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
 
     burst_start, burst_end = [], []
 
+    ## time in seconds to add on either side of the burst to make sure I catch
+    ## all of the burst data
+    add_time = 0.02
+
     for i,b in enumerate(burst_diff):
         if b == 1:
-            burst_start.append(info.ledges[i+1])
+            burst_start.append(info.ledges[i+1]-add_time)
         elif b == -1:
-            burst_end.append(info.redges[i])
-
+            if not len(burst_start) == 0:
+                if burst_start[-1] < info.redges[i]:
+                    burst_end.append(info.redges[i]+add_time)
+                else:
+                    continue
+            else:
+                continue
 
 
     #burst_edges = [edges[1]-0.02, edges[-2]+0.02]
@@ -434,8 +509,10 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
 
     if not plotlc is None:
 
-        min_time = edges[1]-0.1
-        max_time = edges[-2]+0.1
+        #min_time = edges[1]-0.1
+        #max_time = edges[-2]+0.1
+        min_time = lc.time[0]
+        max_time = lc.time[-1]
 
         figure(figsize=(15,9))
         plot(lc.time, lc.countrate, lw=2, color='black', linestyle='steps-mid', label="Data light curve")
@@ -445,8 +522,8 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
         max_cr = np.max(lc.countrate)+0.1*np.max(lc.countrate)
         axis([min_time, max_time, 0.2, max_cr])
         for i,b in enumerate(info.burst_edges):
-            vlines(b[0]-0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed', label="Burst edges, burst " + str(i))
-            vlines(b[1]+0.02, 0.1, max_cr, lw=2, color='green', linestyle='dashed')
+            vlines(b[0], 0.1, max_cr, lw=2, color='green', linestyle='dashed', label="Burst edges, burst " + str(i))
+            vlines(b[1], 0.1, max_cr, lw=2, color='green', linestyle='dashed')
         legend(prop={"size":16})
         if len(info.bsrates) <= 2:
             plt.title("Not a burst")
@@ -467,25 +544,10 @@ def extract_bursts(times, t0=None, p0=0.05, nbootstrap=512, sig_threshold=1.0e-7
                 sig_threshold)
 
 
-    all_info = burst_parameters(times, pval_dict, sig_threshold, p0, nbootstrap, froot)
+    all_info = burst_parameters(times, pval_dict, t0, sig_threshold, p0, nbootstrap, froot)
 
-    f = open(froot + "burst_times.dat", "w")
-
-    edges = np.array([p.burst_edges for p in all_info])
-    if not t0 is None:
-        edges += t0
-        f.write("#Start time \t End time (both in MET)\n")
-
-    else:
-        f.write("#Start time \t End time (in time since first photon)\n")
-
-    #edges = np.unique(edges)
-    #print(edges)
-
-    for e_outer in edges:
-        for e in e_outer:
-            f.write(str(e[0]) + "\t" + str(e[1]) + "\n")
-
+    f = open(froot + "burst_info_dict.dat", "w")
+    pickle.dump(all_info,f)
     f.close()
 
     return

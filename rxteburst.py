@@ -2,7 +2,7 @@
 #from __future__ import with_statement
 #import numpy as np
 import fnmatch
-#import os
+import os
 import argparse
 #import scipy.special
 #import scipy.stats
@@ -136,9 +136,6 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
 
 def main():
 
-    if clargs.find_bursts:
-        find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot="test")
-
     if extract_bursts:
         print("Running all_bursts ...")
         assert clargs.bfile, "No file with burst start times!"
@@ -162,7 +159,6 @@ if __name__ == "__main__":
                          help='File with burst start times')
     parser.add_argument("-d", "--data-dir", action="store", dest="datadir", required=False, default="./",
                         help="Directory where data is located")
-
 
 
 
