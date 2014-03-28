@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import argparse
 import findbursts
 import rxte
@@ -7,7 +8,12 @@ import rxteburst
 import numpy as np
 
 
-def find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot="test"):
+
+def find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot="test", parfile=None):
+
+    print("parfile: " + str(parfile))
+    if parfile is None:
+        parfile = findbursts.TwoPrint(froot + "_parameters.dat")
 
     len_datafile = len(datafile.split("/")[-1])
     filename = datafile.split("/")[-1]
@@ -21,16 +27,15 @@ def find_bursts(datafile, bary=True, sig_threshold=1.0e-7, nbootstrap=200, froot
     dt_neg = np.where(dt < 0.0)[0]
 
     if len(dt_neg) >=1:
-        print("I am here!")
+        parfile("Excluding " + str(len(dt_neg)) + " photons.\n")
         times = list(times)
         for i,t in enumerate(dt_neg):
-            print("bla")
             p = times.pop(t-i)
 
     times = np.array(times)
 
     findbursts.extract_bursts(times, t0=data.t0, tseg=5.0, bin_distance=1.5, nbootstrap=nbootstrap,
-                              sig_threshold=sig_threshold, froot=froot, p0=0.1)
+                              sig_threshold=sig_threshold, froot=froot, p0=0.1, parfile=parfile)
 
     return
 
@@ -42,14 +47,21 @@ def all_bursts(testdir, bary, sig_threshold, nbootstrap, froot):
     if not os.path.exists("./bursts"):
         os.makedirs("./bursts")
 
+    parfile = findbursts.TwoPrint("./bursts/parameters.dat")
+    script_dir = os.path.dirname(__file__)
+
+    parfile("Using revision " + str(findbursts.git_hash(gitdir=script_dir)) + " for scripts in rxteanalysis.\n")
+    now = datetime.utcnow()
+    parfile("Script started on %i-%i-%i at %i:%i:%i UTC.\n" %(now.year, now.month, now.day,
+                                                          now.hour, now.minute, now.second))
+
     for f in filenames:
         fsplit = f.split("/")
         len_datafile = len(fsplit[-1])
         datadir = f[:-len_datafile]
-        print("datadir: " + str(datadir))
         froot = "./bursts/" + fsplit[1] + "_burst"
-        print("froot: " + str(froot))
-        find_bursts(f, bary, sig_threshold, nbootstrap, froot)
+        parfile("Saving files with root %s" % froot)
+        find_bursts(f, bary, sig_threshold, nbootstrap, froot, parfile)
 
     return
 

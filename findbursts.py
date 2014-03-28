@@ -24,11 +24,40 @@ except ImportError:
 import lightcurve
 
 
+import subprocess
+
+def git_hash(gitdir = "./"):
+    return subprocess.check_output(["git", "--git-dir", gitdir+"/.git", "rev-parse", "HEAD"])
+
 counts_cutoff = 600.0
 
 def straight(x, a,b):
     res = a*x+b
     return res
+
+
+
+class TwoPrint(object):
+
+    def __init__(self,filename):
+        self.file = open(filename, "w")
+        self.filename = filename
+        self.file.write("##\n")
+        self.close()
+        return
+
+    def __call__(self, printstr):
+        print(printstr)
+        self.file = open(self.filename, "a")
+        self.file.write(printstr + "\n")
+        self.close()
+        return
+
+    def close(self):
+        self.file.close()
+        return
+
+
 
 class PoissonPosterior(object):
 
@@ -349,15 +378,18 @@ def search_data(times, dt=0.1, dt_small=0.01, tseg=5.0, bin_distance=3.0, model=
         es_all1.append(exit_status1)
         success_all1.append(success1)
 
-        burstdict = {"lc":lc, "pvals":pvals_all, "popt1":popt_all1, "popt2":popt_all2, "exit1":es_all1,
-                     "exit2":es_all2, "success1":success_all1, "success2":success_all2}
+    burstdict = {"lc":lc, "pvals":pvals_all, "popt1":popt_all1, "popt2":popt_all2, "exit1":es_all1,
+                 "exit2":es_all2, "success1":success_all1, "success2":success_all2}
 
     return burstdict, significant_all
 
 
 
-def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None):
+def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, nbootstrap=512, plotlc=None,
+                     parfile=None):
 
+    if parfile is None:
+        parfile = TwoPrint(plotlc+"_parameters.dat")
     ## read out all p-values
     pvals_all = np.array(pvals_dict["pvals"])
 
@@ -386,7 +418,7 @@ def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, 
         pvals_sig_new = pvals_sig_ind
 
 
-    print("Found " + str(len(pvals_sig_new)) + " putative bursts. Running Bayesian Blocks ...")
+    parfile("Found " + str(len(pvals_sig_new)) + " putative bursts. Running Bayesian Blocks ...")
 
     ## extract original light curve
     lc = pvals_dict["lc"]
@@ -396,6 +428,8 @@ def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, 
     tseg_before = 1.0
     tseg_after = 4.0
 
+    parfile("Time added before bin with outlier for Bayesian Blocks search: %f s.\n" % tseg_before)
+    parfile("Time added after bin with outlier for Bayesian Blocks search: %f s.\n" % tseg_after)
 
     burst_file = open(plotlc + "_burst_times.dat", "w")
 
@@ -409,20 +443,20 @@ def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, 
     all_info = []
 
     for i,s in enumerate(sigtimes):
-        print("I am on burst " + str(i))
+        #parfile("I am on burst " + str(i))
         ## extract a region 2 seconds before and after each significant time bin
         si = times.searchsorted(s-tseg_before)
         ei = times.searchsorted(s+tseg_after)
 
         tnew = times[si:ei]
-        print("tseg: " + str(tnew[-1] - tnew[0]))
+        #parfile("tseg: " + str(tnew[-1] - tnew[0]))
 
         if not plotlc is None:
             plotlc_new = plotlc + "_b" + str(i)
         else:
             plotlc_new = plotlc
 
-        info = bayesian_blocks(tnew, p0, nbootstrap, plotlc_new)
+        info = bayesian_blocks(tnew, p0, nbootstrap, plotlc_new, parfile)
         if len(info.bsrates) <=2 :
             print("This is not a burst!")
             continue
@@ -459,7 +493,7 @@ def burst_parameters(times, pvals_dict, t0=None, sig_threshold=1.0e-8, p0=0.05, 
     return all_info
 
 
-def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
+def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None, parfile=None):
 
     ## run Bayesian blocks algorithm
     info = xbblocks.bsttbblock(times, [np.min(times)], [np.max(times)], nbootstrap=nbootstrap, p0=p0)
@@ -490,6 +524,8 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
     ## time in seconds to add on either side of the burst to make sure I catch
     ## all of the burst data
     add_time = 0.02
+    if not parfile is None:
+        parfile("Time added to either side of the burst: %f" % add_time)
 
     for i,b in enumerate(burst_diff):
         if b == 1:
@@ -537,14 +573,28 @@ def bayesian_blocks(times, p0=0.05, nbootstrap=512, plotlc=None):
 
 
 def extract_bursts(times, t0=None, p0=0.05, nbootstrap=512, sig_threshold=1.0e-7, dt=0.1, dt_small=0.01,
-                   tseg=5.0, bin_distance=3.0, froot="test"):
+                   tseg=5.0, bin_distance=3.0, froot="test", parfile=None):
 
+
+    if parfile is None:
+       parfile = TwoPrint(froot + "_parameters.dat")
+
+    parfile("Searching data from %s to %f.\n" % (times[0], times[-1]))
+    parfile("Bin size of the light curve when searching for outliers: dt = %f s\n" % dt)
+    parfile("Bin size of the light curve used for fitting during outlier search: dt_small = %f s\n" % dt_small)
+    parfile("Size of segment used for fitting background is: t_seg = %f \n" % tseg)
+    parfile("Distance between bin searched and segments used in background fitting: bin_distance = %f \n" % bin_distance)
+    parfile("Significance threshold for outlier search is: p < %.10f \n" % sig_threshold)
+    parfile("Results saved in files with root %s \n" % froot)
 
     pval_dict, sig_all = search_data(times, dt, dt_small, tseg, bin_distance, straight, None,
                 sig_threshold)
 
 
-    all_info = burst_parameters(times, pval_dict, t0, sig_threshold, p0, nbootstrap, froot)
+    parfile("Significance threshold for Bayesian Blocks, block acceptance: p = %f" % p0)
+    parfile("Number of bootstrapping operations in Bayesian Blocks: n = %f" % nbootstrap)
+
+    all_info = burst_parameters(times, pval_dict, t0, sig_threshold, p0, nbootstrap, froot, parfile)
 
     f = open(froot + "burst_info_dict.dat", "w")
     pickle.dump(all_info,f)
