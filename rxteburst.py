@@ -1,79 +1,39 @@
 
 #from __future__ import with_statement
-import numpy as np
+#import numpy as np
 import fnmatch
 import os
 import argparse
-import scipy.special
-import scipy.optimize
-import scipy
+#import scipy.special
+#import scipy.stats
+#import scipy.optimize
+#import scipy
 import glob
+
+try:
+    import xbblocks
+except ImportError:
+    print("You need to have the xbblocks script from Peter Williams' pwpy repository in "
+          "order to find bursts!")
+
+
+import matplotlib
+matplotlib.use("Agg")
 
 from pylab import *
 #rc("font", size=20, family="serif", serif="Computer Sans")
 #rc("text", usetex=True)
 
-
+#import lightcurve
 
 try:
     import burst
     print("Burst sucessfully imported!")
 except ImportError:
     print("Module Burst not found!")
+
 import rxte
-
-
-def straight(x, a,b):
-    return a*x + b
-
-class PoissonPosterior(object):
-
-    def __init__(self, times, counts, model):
-        self.times = times
-        self.counts = counts
-        self.model = model
-        self.delta = self.times[1] - self.times[0]
-        self.countrate = self.counts/self.delta
-
-
-    def logprior(self, theta):
-        return 1.0
-
-    def _log_likelihood(self, lambdas, data):
-
-        llike = -np.sum(lambdas) + np.sum(data*np.log(lambdas))\
-                -np.sum(scipy.special.gammaln(data + 1))
-
-        return llike
-
-    def loglikelihood(self, theta):
-
-        lambdas = self.model(*theta)
-        return self._log_likelihood(lambdas, self.countrate)
-
-
-    def logposterior(self, theta):
-        return self.logprior(theta) + self.loglikelihood(theta)
-
-
-    def __call__(self, theta):
-        return self.logposterior(theta)
-
-def fit_bkg(times, counts, model, theta_init):
-
-    lpost = PoissonPosterior(times, counts, model)
-
-    scipy_version = scipy.__version__
-    if scipy_version >= "0.11.0":
-        res = scipy.optimize.minimize(-lpost, theta_init, method="Nelder-Mead")
-
-
-    return
-
-
-def interpolate_bkg(segment1, segment2, searchbin, model=straight):
-
-    return
+import findbursts
 
 
 def search_filenames_recursively(testdir, testexpression):
@@ -83,6 +43,10 @@ def search_filenames_recursively(testdir, testexpression):
             matches.append(os.path.join(root, filename))
 
     return matches
+
+
+
+
 
 def read_burst_times(filename):
     """
@@ -170,6 +134,7 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
     return
 
 def main():
+
     if extract_bursts:
         print("Running all_bursts ...")
         assert clargs.bfile, "No file with burst start times!"
@@ -184,6 +149,8 @@ def main():
     print("Done!")
     return
 
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Make burst files out of RXTE data!')
@@ -192,10 +159,14 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--data-dir", action="store", dest="datadir", required=False, default="./",
                         help="Directory where data is located")
 
+
+
     parser.add_argument("-e", "--extract-bursts", action="store_true", dest='extract',
                         help="Would you like to extract bursts from data?")
     parser.add_argument("-l", "--plot-lightcurves", action="store_true", dest='plot_lc',
                         help="Would you like to plot light curves to file?")
+
+
     parser.add_argument("-a", "--analysis", action="store_true", dest="analysis",
                         help="Would you like to run the Bayesian PSD analysis on a bunch of files?")
 
@@ -205,7 +176,7 @@ if __name__ == "__main__":
                         help="Number of iterations for MCMC run")
     parser.add_argument("-s", "--nsim", action="store", dest="nsim", required=False, default=1000, type=int,
                         help="Number of periodograms to simulate from posterior distribution")
-    parser.add_argument("-f", "--froot", action="store", dest="froot", default="", required=False,
+    parser.add_argument("--fr", "--froot", action="store", dest="froot", default="", required=False,
                         help="File root that can be specified to run the analysis only on a subset of bursts")
 
     clargs = parser.parse_args()
