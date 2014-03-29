@@ -129,7 +129,12 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
         b = rxte.getpickle(f)
         fsplit = f.split("/")
         namestr = fsplit[-1][:-10]
-        b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim)
+        ps = b.ps
+        if len(ps.ps) > 4096:
+            binps = ps.rebinps(1.0)
+            m = int(binps.df/ps.df)
+            b.ps = binps
+        b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m)
 
     return
 
