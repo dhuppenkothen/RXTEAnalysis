@@ -134,6 +134,8 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
             binps = ps.rebinps(1.0)
             m = int(binps.df/ps.df)
             b.ps = binps
+        else:
+            m = 1
         b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m)
 
     return
