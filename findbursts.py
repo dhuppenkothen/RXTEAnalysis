@@ -3,8 +3,8 @@ matplotlib.use("Agg")
 
 from pylab import *
 
-rc("font", size=20, family="serif", serif="Computer Sans")
-rc("text", usetex=True)
+#rc("font", size=20, family="serif", serif="Computer Sans")
+#rc("text", usetex=True)
 
 
 import numpy as np
