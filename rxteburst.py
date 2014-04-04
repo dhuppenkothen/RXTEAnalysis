@@ -136,6 +136,7 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
             b.ps = binps
         b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m)
 
+        b.save_burst(namestr+"_burstfile.dat")
     return
 
 def main():
