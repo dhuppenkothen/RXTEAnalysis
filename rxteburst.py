@@ -121,11 +121,12 @@ def plot_lightcurves(datadir="./"):
     return
 
 
-def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="test"):
+def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fitmethod='powell', datadir="./", froot="test"):
 
     filenames = glob.glob(datadir + froot + "*burst.dat")
 
     for f in filenames:
+        print("I am on burst %s" %f)
         b = rxte.getpickle(f)
         fsplit = f.split("/")
         namestr = fsplit[-1][:-10]
@@ -136,7 +137,7 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, datadir="./", froot="te
             b.ps = binps
         else:
             m = 1
-        b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m)
+        b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m, fitmethod=fitmethod)
 
         b.save_burst(namestr+"_burstfile.dat")
     return
