@@ -1,4 +1,6 @@
 import os
+import glob
+import cPickle as pickle
 from datetime import datetime
 import argparse
 import findbursts
@@ -65,12 +67,52 @@ def all_bursts(testdir, bary, sig_threshold, nbootstrap, froot):
 
     return
 
+
+def save_burst_data():
+
+    burstfiles = rxteburst.search_filenames_recursively("./", "*burst*data.dat")
+    for b in burstfiles:
+        print("On burst file %s" %b)
+        bsplit = b.split("/")
+        datadir = bsplit[0] + "/" + bsplit[1]
+        print("datadir: " + str(datadir))
+        bfileroot = bsplit[-1].split("_")[0]
+
+        datafilename = glob.glob(datadir + "/" + bfileroot + "/processed/LC*.asc")[0]
+        print("Data file %s" %datafilename)
+        print("Extracting data ...")
+        data = rxte.RXTEData(datafile=datafilename,emiddir=datadir+"/"+bfileroot+"/processed/")
+
+        burstdata = rxte.conversion(b)
+        bursttimes = [float(f) for f in burstdata[0]]
+        bstart = bursttimes[0]
+        bend = bursttimes[-1]
+        blength = bend - bstart
+
+        print("Making burst object")
+        bobj = rxte.RXTEBurst(bstart, blength, data.photons, data.t0, pcus=data.pcus, bary=False,
+                              add_frac=0.2, fnyquist=4096.0, norm="leahy")
+
+        bfileroot = bsplit[-1].split("_")[0]
+        btimestamp = "%0.3f" %bstart
+
+        print("Saving burst object in file %s" %(bfileroot+btimestamp+"_burst.dat"))
+        bfile = open(bfileroot + "_" + btimestamp + "_burst.dat", "w")
+        pickle.dump(bobj, bfile)
+        bfile.close()
+
+    return
+
 def main():
 
-    if not clargs.datafile:
-        all_bursts(testdir, bary, sig_threshold, nbootstrap, froot)
-    else:
-        find_bursts(datafile, bary, sig_threshold, nbootstrap, froot)
+    if clargs.searchdata:
+        if not clargs.datafile:
+            all_bursts(testdir, bary, sig_threshold, nbootstrap, froot)
+        else:
+            find_bursts(datafile, bary, sig_threshold, nbootstrap, froot)
+
+    elif clargs.savedata:
+        save_burst_data()
 
     return
 
@@ -79,6 +121,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Find bursts in RXTE data! Using Bayesian Blocks! Awesomeness!')
 
+
+    parser.add_argument("--search", action="store_true", dest='searchdata', required=False,
+                        help='Do you want to search data?')
+    parser.add_argument("--save", action="store_true", dest='savedata', required=False,
+                        help="Do you want to save data as burstfiles?")
 
     parser.add_argument("-f", "--filename", action="store", dest="datafile", required=False,
                         help="Data file name")

@@ -68,14 +68,19 @@ def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
     len_datafile = len(datafile.split("/")[-1])
 
     data = rxte.RXTEData(times=None, channels=None, datafile=datafile, npcus=None, ra=None, dec=None,
-                 emid = None, emiddir=datafile[:-len_datafile], bary=bary)
+                        emid = None, emiddir=None, bary=bary)
+                 #emiddir=datafile[:-len_datafile], bary=bary)
+    print("data unbarycentered t_start = %f" %data.photons[0].unbary)
+    print("data barycentered t_start = %f" %data.photons[0].time)
+    #print("bary: " + str(bary))
+    #print("all photons, unbarycentered: " + str([p.unbary for p in data.photons]))
 
     tstart, blen = read_burst_times(bursttimefile)
 
     for i,(s,l) in enumerate(zip(tstart, blen)):
         #print("First photon: " + str(data.photons[0].unbary))
         #print("Last photon: " + str(data.photons[-1].unbary))
-        #print("start time: " + str(s-data.t0))
+        print("start time: " + str(s-data.t0))
         if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
             try:
                 b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=4096.0, norm="leahy",
