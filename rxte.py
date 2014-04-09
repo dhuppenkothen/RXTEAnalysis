@@ -5,12 +5,15 @@ import glob
 from operator import itemgetter
 import numpy as np
 import cPickle as pickle
+import copy
+
 import pyfits
 
 import burst
 import generaltools
 import lightcurve
 import powerspectrum
+import mle
 
 def conversion(filename):
     f=open(filename, 'r')
@@ -267,7 +270,7 @@ class RXTEBurst(burst.Burst, object):
 
         return
 
-    def deadtime_correction(self, bst_unbary, bend_unbary, std1dir="./", vle_correction="max"):
+    def deadtime_correction(self, bary=True, std1dir="./", vle_correction="max"):
 
         """
                 Dead time corrections for RXTE data. Reads out Standard 1 files,
@@ -317,10 +320,7 @@ class RXTEBurst(burst.Burst, object):
 
         all_times, all_xe_total, all_vlecnt, all_vpcnt, all_remainingcnt = [], [], [], [], []
 
-
-
         for f in std1file:
-
 
             if std1dir[-1] == "/":
                 std1path = std1dir + "pca/" + f
@@ -330,16 +330,28 @@ class RXTEBurst(burst.Burst, object):
             std1 = glob.glob(std1path+"*")[0]
             hdulist = pyfits.open(std1)
             data = hdulist[1].data
-            time = data["Time"]
-            tstart = time[0]
-            tend = time[-1]+0.125*1024.0
-            times = np.arange(tstart, tend, 0.125)
+            header = hdulist[1].header
+            clockcorr = header["TIMEZERO"]
 
-            all_times.extend(times)
+            time = data["Time"]
+            #tstart = time[0]
+            #tend = time[-1]+0.125*1024.0
+            times = []
+
+            for t in time:
+                t_temp = np.arange(1024)*0.125+t
+                times.extend(t_temp)
+
+            times = np.array(times) + clockcorr
 
             ### VLE events
             vlecnt = data["VLECnt"].flatten()
             all_vlecnt.extend(vlecnt)
+
+
+            #times = np.arange(len(vlecnt))*0.125 + tstart + clockcorr
+            all_times.extend(times)
+
 
             ### good xenon events
             xecntpcu0 = data["XeCntPcu0"].flatten()
@@ -348,16 +360,30 @@ class RXTEBurst(burst.Burst, object):
             xecntpcu3 = data["XeCntPcu3"].flatten()
             xecntpcu4 = data["XeCntPcu4"].flatten()
 
-            ### propane layer events
-            vpcnt = data["VpCnt"]
-
-            ### coincident events
-            remainingcnt = data["RemainingCnt"]
-
             xe_total = xecntpcu0+xecntpcu1+xecntpcu2+xecntpcu3+xecntpcu4
-
             all_xe_total.extend(xe_total)
 
+            ### propane layer events
+            vpcnt = data["VpCnt"].flatten()
+            all_vpcnt.extend(vpcnt)
+
+            ### coincident events
+            remainingcnt = data["RemainingCnt"].flatten()
+            all_remainingcnt.extend(remainingcnt)
+
+            print("len(times): %f" %len(times))
+            print("len(xe_total): %f" %len(xe_total))
+            print("len(vpcnt): %f" %len(vpcnt))
+            print("len(vlecnt): %f" %len(vlecnt))
+            print("len(remainingcnt): %f" %len(remainingcnt))
+
+
+
+        print("len(all_times): %f" %len(all_times))
+        print("len(xe_total): %f" %len(all_xe_total))
+        print("len(all_vpcnt): %f" %len(all_vpcnt))
+        print("len(all_vlecnt): %f" %len(all_vlecnt))
+        print("len(all_remainingcnt): %f" %len(all_remainingcnt))
 
         ## check that times are actually sorted
         dt = np.array(all_times[1:]) - np.array(all_times[:-1])
@@ -366,12 +392,17 @@ class RXTEBurst(burst.Burst, object):
         ### if there are time differences between bins <0, then the list isn't sorted
         ### this is bad and we need to fix it!
         if len(dt_subzero) > 0:
-            allzip = zip(all_times, all_vlecnt, all_xe_total)
+            allzip = zip(all_times, all_vlecnt, all_xe_total, all_vpcnt, all_remainingcnt)
             allzip_sorted = sorted(allzip, key=itemgetter(0))
 
             all_times = np.array(allzip_sorted)[:,0]
             all_vlecnt = np.array(allzip_sorted)[:,1]
             all_xe_total = np.array(allzip_sorted)[:,2]
+            all_vpcnt = np.array(allzip_sorted)[:,3]
+            all_remainingcnt = np.array(allzip_sorted)[:,4]
+
+
+        totalcnt = np.array(all_vlecnt) + np.array(all_xe_total) + np.array(all_vpcnt) + np.array(all_remainingcnt)
 
 
         ### figure out number of PCUs:
@@ -384,26 +415,38 @@ class RXTEBurst(burst.Burst, object):
         else:
             npcus = max_pcus
 
-        ts = all_times.searchsorted(bst_unbary)
-        te = all_times.searchsorted(bend_unbary)+1
+
+        ### find unbarycentered start and end times:
+        if bary:
+            bst_unbary = self.photons[0].unbary + self.ttrig
+            bend_unbary = self.photons[-1].unbary + self.ttrig
+
+        else:
+            bst_unbary = self.photons[0].time + self.ttrig
+            bend_unbary = self.photons[-1].time + self.ttrig
+
+        all_times = np.array(all_times)
+        ts = all_times.searchsorted(bst_unbary)-2
+        te = all_times.searchsorted(bend_unbary)+2
 
         burst_times = all_times[ts:te]
         if vle_correction == "max":
             burst_vle = np.max(all_vlecnt[ts:te])/float(npcus)
             burst_xe_total = np.max(all_xe_total[ts:te])/float(npcus)
+            burst_totalcnt = np.max(totalcnt[ts:te])/float(npcus)
         elif vle_correction == "mean":
             burst_vle = np.mean(all_vlecnt[ts:te])/float(npcus)
             burst_xe_total = np.mean(all_xe_total[ts:te])/float(npcus)
+            burst_totalcnt = np.mean(totalcnt[ts:te])/float(npcus)
 
-
-        freq = self.ps.freq
+        freq = np.array(self.ps.freq)
         nfreq = len(freq)
 
         ### dead time for VLE correction
         tau_vle = 1.7e-4
 
         ### VLE correction
-        p_vle = 2.0*burst_vle*burst_xe_total*(tau**2.0)*(np.sin(np.pi*tau*freq)/(np.pi*tau*freq))**2.0
+        p_vle = 2.0*burst_vle*burst_xe_total*(tau_vle**2.0)*(np.sin(np.pi*tau_vle*freq)/(np.pi*tau_vle*freq))**2.0
 
 
         ### dead time for chain correction
@@ -411,11 +454,35 @@ class RXTEBurst(burst.Burst, object):
         binsize = self.lc.res
         fnyquist = np.max(freq)
 
-        p1 = 2.0*(1.0 - )
+        ## first dead time coefficient
+        p1 = 2.0*(1.0 - 2.0*burst_totalcnt*tau_d*(1.0-(tau_d/(2.0*binsize))))
+
+        ## second dead time coefficient
+        p2 = 2.0*burst_totalcnt*tau_d*(float(nfreq-1)/float(nfreq))*(tau_d/binsize)
+
+        ## power spectral correction due to paralysable dead time:
+        p_d = p1 - p2*np.cos((np.pi*freq)/fnyquist)
+
+        ## normalisation might be wrong, so fit a parameter such that the correction actually represents
+        ## the loss of power in the periodogram
+        def psd_corr(x,norm):
+            return 2.0+(norm*p_vle+norm*p_d)
 
 
+        fitspec = mle.PerMaxLike(self.ps, fitmethod='bfgs')
+        fitparams = fitspec.mlest(psd_corr, [1.0])
+
+        norm_bestfit = fitparams["popt"][0]
+
+        ps_corr = norm_bestfit*(p_vle+p_d)
+
+        powers_corrected = self.ps.ps - ps_corr
+
+        self.ps_corr = copy.copy(self.ps)
+        self.ps_corr.ps = powers_corrected
 
         return
+
 
 
 class NoDeadTimeFileException(Exception):
