@@ -66,6 +66,8 @@ def read_burst_times(filename):
 def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
 
     len_datafile = len(datafile.split("/")[-1])
+    len_processed = len(datafile.split("/")[-2])
+
 
     data = rxte.RXTEData(times=None, channels=None, datafile=datafile, npcus=None, ra=None, dec=None,
                         emid = None, emiddir=None, bary=bary)
@@ -83,8 +85,9 @@ def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
         print("start time: " + str(s-data.t0))
         if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
             try:
-                b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=4096.0, norm="leahy",
+                b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
                                    pcus = data.pcus)
+                b.ps_corr = b.deadtime_correction(std1dir=datafile[:-(len_datafile+len_processed+1)])
                 b.save_burst(fileroot + "_" + str(s) + "_burst.dat")
             except rxte.ZeroCountsException:
                 print("No counts in burst!")
@@ -108,15 +111,72 @@ def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.da
 
     return
 
-def plot_lightcurves(datadir="./"):
+def plot_lightcurves(datadir="./", plot_ps = True):
 
     filenames = glob.glob(datadir + "*burst.dat")
     for f in filenames:
         b = rxte.getpickle(f)
-        bintimes, bincounts = rxte.rebin_lightcurve(b.lc.time, b.lc.countrate, 10)
-        plot(bintimes, bincounts/np.max(b.pcus), lw=2, color='black', linestyle='steps-mid')
+        if plot_ps:
+            fig = figure(figsize=(24, 9))
+            plt.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95, wspace=0.2, hspace=0.2)
+            ax = fig.add_subplot(121)
+        else:
+            fig = figure(figsize=(12,9))
+            plt.subplots_adjust(top=0.9, bottom=0.1, left=0.05, right=0.95, wspace=0.2, hspace=0.2)
+            subplot(111)
+        #bintimes, bincounts = rxte.rebin_lightcurve(b.lc.time, b.lc.countrate, 10)
+        #plot(bintimes, bincounts/np.max(b.pcus), lw=2, color='black', linestyle='steps-mid')
+        plot(b.lc.time, b.lc.countrate/np.max(b.pcus), lw=2, color='black', linestyle='steps-mid')
+
         xlabel("Time since trigger [s]")
         ylabel("Count rate [cts/s]")
+        if plot_ps:
+            ax = fig.add_subplot(122)
+
+            loglog(b.ps.freq[1:], b.ps.ps[1:], lw=2, color='black', linestyle='steps-mid',
+                        label="Periodogram")
+            if not b.ps_corr is None:
+                loglog(b.ps_corr.freq[1:], b.ps_corr.ps[1:], lw=2, color='cyan', linestyle='steps-mid',
+                        label="Dead-time corrected periodogram")
+
+            nfreq = np.array(b.ps.freq).searchsorted(250.0)
+            psmean = np.mean(b.ps.ps[nfreq:])
+            psvar = np.var(b.ps.ps[nfreq:])
+            npowers = len(b.ps.ps[nfreq:])
+
+            if not b.ps_corr is None:
+                nfreq_corr = np.array(b.ps_corr.freq).searchsorted(250.0)
+                psmean_corr = np.mean(b.ps_corr.ps[nfreq:])
+                psvar_corr = np.var(b.ps_corr.ps[nfreq:])
+                npowers_corr = len(b.ps_corr.ps[nfreq:])
+
+
+            theovar = 2.0
+
+            axis([np.min(b.ps.freq[1:]), np.max(b.ps.freq[1:]), np.min(b.ps.ps[1:])/2.0, np.max(b.ps.ps[1:])*2.0])
+
+            if not b.ps_corr is None:
+                ax.text(0.05, 0.1, r"uncorrected: $\mu = %.3f$, $\sigma^2 = %.3f$" %(psmean, psvar) + " (%.2f)" %theovar +
+                                           "\n" + "for %i powers \n" %npowers +
+                                    r"corrected: $\mu = %.3f$, $\sigma^2 = %.3f$" %(psmean_corr, psvar_corr) + " (%.2f)" %theovar +
+                                           "\n" + "for %i powers \n" %npowers_corr,
+                                verticalalignment='bottom', horizontalalignment='left',
+                                transform=ax.transAxes,
+                                color='green', fontsize=20)
+
+            else:
+                ax.text(0.05, 0.1, r"$\mu = %.3f$, $\sigma^2 = %.3f$" %(psmean, psvar) + " (%.2f)" %theovar +
+                                           "\n" + "for %i powers" %npowers,
+                                verticalalignment='bottom', horizontalalignment='left',
+                                transform=ax.transAxes,
+                                color='green', fontsize=20)
+
+            hlines(2.0, b.ps.freq[1], b.ps.freq[-1], lw=2, color='red', linestyle='dashed',
+                   label="Theoretical Poisson level")
+            legend()
+
+            xlabel("Frequency [Hz]", fontsize=22)
+            ylabel("Leahy Power", fontsize=22)
         fsplit = f.split("_")
         title(fsplit[0] + ", tstart = " + fsplit[1] + ", pcus = " + str(np.max(b.pcus)))
         fnew = fsplit[0] + "_" + fsplit[1] + "_lc.png"
@@ -126,7 +186,7 @@ def plot_lightcurves(datadir="./"):
     return
 
 
-def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fitmethod='powell', datadir="./", froot="test"):
+def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fnyquist=2048.0, fitmethod='powell', datadir="./", froot="test"):
 
     filenames = glob.glob(datadir + froot + "*burst.dat")
 
@@ -135,8 +195,11 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fitmethod='powell', dat
         b = rxte.getpickle(f)
         fsplit = f.split("/")
         namestr = fsplit[-1][:-10]
-        ps = b.ps
-        if len(ps.ps) > 4096:
+        if not b.ps_corr is None:
+            ps = b.ps_corr
+        else:
+            ps = b.ps
+        if len(ps.ps) > fnyquist:
             binps = ps.rebinps(1.0)
             m = int(binps.df/ps.df)
             b.ps = binps

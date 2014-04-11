@@ -215,8 +215,6 @@ def fitsegment(s1, s2, bin_time, bin_counts):
 
 
 
-
-
 class RXTEBurst(burst.Burst, object):
 
     def __init__(self, bstart, blength, photons, ttrig, pcus=None, bary=True, add_frac=0.2, fnyquist=4096.0, norm="leahy"):
@@ -226,9 +224,12 @@ class RXTEBurst(burst.Burst, object):
 
         self.bst = bstart - add_frac*blength
 
-        self.blen = (1.0+2.0*add_frac)*blength
+        #self.blen = (1.0+2.0*add_frac)*blength
 
-        self.bend = self.bst + (1.0+add_frac)*blength
+        self.bend = bstart + (1.0+add_frac)*blength
+
+        self.blen = self.bend - self.bst
+
 
         self.ttrig = ttrig
 
@@ -401,6 +402,11 @@ class RXTEBurst(burst.Burst, object):
             all_vpcnt = np.array(allzip_sorted)[:,3]
             all_remainingcnt = np.array(allzip_sorted)[:,4]
 
+        all_times = np.array(all_times)
+        all_vlecnt = np.array(all_vlecnt)
+        all_xe_total = np.array(all_xe_total)
+        all_vpcnt = np.array(all_vpcnt)
+        all_remainingcnt = np.array(all_remainingcnt)
 
         totalcnt = np.array(all_vlecnt) + np.array(all_xe_total) + np.array(all_vpcnt) + np.array(all_remainingcnt)
 
@@ -429,7 +435,13 @@ class RXTEBurst(burst.Burst, object):
         ts = all_times.searchsorted(bst_unbary)-2
         te = all_times.searchsorted(bend_unbary)+2
 
+        if ts == te:
+            print("No standard 1 data! No deadtime correction possible. Returning ...")
+            return None
+
+
         burst_times = all_times[ts:te]
+
         if vle_correction == "max":
             burst_vle = np.max(all_vlecnt[ts:te])/float(npcus)
             burst_xe_total = np.max(all_xe_total[ts:te])/float(npcus)
@@ -465,23 +477,43 @@ class RXTEBurst(burst.Burst, object):
 
         ## normalisation might be wrong, so fit a parameter such that the correction actually represents
         ## the loss of power in the periodogram
-        def psd_corr(x,norm):
-            return 2.0+(norm*p_vle+norm*p_d)
+        def psd_corr(x,norm1, norm2):
+            norm1 = np.exp(norm1)
+            norm2 = np.exp(norm2)
+            x = np.array(x)
+            p_vle = 2.0*burst_vle*burst_xe_total*(tau_vle**2.0)*(np.sin(np.pi*tau_vle*x)/(np.pi*tau_vle*x))**2.0
+            p_d = p1 - p2*np.cos((np.pi*x)/fnyquist)
+            return norm1*p_vle+norm2*p_d
+
+        ps_tofit = powerspectrum.PowerSpectrum()
+
+        ps_ind = np.array(self.ps.freq).searchsorted(250.0)
+        ps_tofit.freq = self.ps.freq[ps_ind:]
+        ps_tofit.ps = self.ps.ps[ps_ind:]
+        ps_tofit.df = self.ps.df
+        ps_tofit.n = 2*len(ps_tofit.freq)
+        ps_tofit.norm = "leahy"
+        ps_tofit.nphots = np.sum(ps_tofit.ps)
 
 
-        fitspec = mle.PerMaxLike(self.ps, fitmethod='bfgs')
-        fitparams = fitspec.mlest(psd_corr, [1.0])
+        fitspec = mle.PerMaxLike(ps_tofit, fitmethod='bfgs')
+        fitparams = fitspec.mlest(psd_corr, [1.0, 1.0])
 
-        norm_bestfit = fitparams["popt"][0]
+        norm_bestfit = fitparams["popt"]
 
-        ps_corr = norm_bestfit*(p_vle+p_d)
+        poisson_corrected = psd_corr(freq, *norm_bestfit)
 
-        powers_corrected = self.ps.ps - ps_corr
+        power_correction = 2.0 - poisson_corrected
 
-        self.ps_corr = copy.copy(self.ps)
-        self.ps_corr.ps = powers_corrected
+        powers_corrected = self.ps.ps + power_correction
 
-        return
+        ps_corr = copy.copy(self.ps)
+        ps_corr.ps = powers_corrected
+
+        return ps_corr
+
+
+
 
 
 
