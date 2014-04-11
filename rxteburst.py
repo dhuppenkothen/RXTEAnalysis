@@ -9,6 +9,7 @@ import argparse
 #import scipy.optimize
 #import scipy
 import glob
+import findbursts
 
 try:
     import xbblocks
@@ -188,25 +189,32 @@ def plot_lightcurves(datadir="./", plot_ps = True):
 
 def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fnyquist=2048.0, fitmethod='powell', datadir="./", froot="test"):
 
+    logfile = findbursts.TwoPrint("sgr1900_bayesiananalysis.dat")
+
     filenames = glob.glob(datadir + froot + "*burst.dat")
 
     for f in filenames:
-        print("I am on burst %s" %f)
+        logfile("I am on burst %s" %f)
         b = rxte.getpickle(f)
         fsplit = f.split("/")
         namestr = fsplit[-1][:-10]
         if not b.ps_corr is None:
+            logfile("Running on dead-time corrected periodogram")
             ps = b.ps_corr
         else:
+            logfile("No dead-time corrected Periodogram for this burst. Running uncorrected periodogram instead.")
             ps = b.ps
         if len(ps.ps) > fnyquist:
+            logfile("Frequency resolution > 1 Hz: rebinning periodogram to 1 Hz")
             binps = ps.rebinps(1.0)
             m = int(binps.df/ps.df)
             b.ps = binps
         else:
             m = 1
+        logfile("Now running Bayesian Analysis")
+        logfile("Output saved with filename root %s." %namestr)
         b.bayesian_analysis(namestr=namestr, nchain=nwalker, niter=niter, nsim=nsim, m=m, fitmethod=fitmethod)
-
+        logfile("All done. Saving data and periodogram search results in %s"%(namestr+"_burstfile.dat"))
         b.save_burst(namestr+"_burstfile.dat")
     return
 
