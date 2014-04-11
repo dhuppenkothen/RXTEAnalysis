@@ -229,7 +229,7 @@ def main():
 
     if analysis:
         bayesian_analysis(nwalker=clargs.nwalker, niter=clargs.niter, nsim=clargs.nsim, datadir=clargs.datadir,
-                          froot=clargs.froot)
+                          froot=clargs.froot, fitmethod=fitmethod)
 
     print("Done!")
     return
@@ -264,8 +264,13 @@ if __name__ == "__main__":
     parser.add_argument("--fr", "--froot", action="store", dest="froot", default="", required=False,
                         help="File root that can be specified to run the analysis only on a subset of bursts")
 
+    parser.add_argument("--fitmethod", action="store", dest="fitmethod", required=False, default="bfgs",
+                        help="Method to use for fitting the data. Default is BFGS. For choices consult the "
+                             "scipy manual.")
+
     clargs = parser.parse_args()
     extract_bursts = clargs.extract
     plot_lcs = clargs.plot_lc
     analysis = clargs.analysis
+    fitmethod = clargs.fitmethod
     main()
