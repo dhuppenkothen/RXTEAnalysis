@@ -189,7 +189,7 @@ def plot_lightcurves(datadir="./", plot_ps = True):
 
 def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fnyquist=2048.0, fitmethod='powell', datadir="./", froot="test"):
 
-    logfile = findbursts.TwoPrint("sgr1900_bayesiananalysis.dat")
+    logfile = findbursts.TwoPrint(datadir + "sgr1900_bayesiananalysis.dat")
 
     filenames = glob.glob(datadir + froot + "*burst.dat")
 
