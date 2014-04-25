@@ -208,7 +208,7 @@ def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fnyquist=2048.0, fitmet
             logfile("Frequency resolution > 1 Hz: rebinning periodogram to 1 Hz")
             binps = ps.rebinps(1.0)
             m = int(binps.df/ps.df)
-            b.ps = binps
+            ps = binps
         else:
             m = 1
         logfile("Now running Bayesian Analysis")
