@@ -64,7 +64,7 @@ def read_burst_times(filename):
 
 
 
-def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
+def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bary=True, fileroot="test", blen=None):
 
     len_datafile = len(datafile.split("/")[-1])
     len_processed = len(datafile.split("/")[-2])
@@ -80,14 +80,26 @@ def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
 
     tstart, blen = read_burst_times(bursttimefile)
 
+    if not tstart_min is None and not tstart_max is None:
+        minind = np.array(tstart).searchsorted(tstart_min)
+        maxind = np.array(tstart).searchsorted((tstart_max))
+        tstart = tstart[minind:maxind]
+        blen = blen[minind:maxind]
+
+
     for i,(s,l) in enumerate(zip(tstart, blen)):
         #print("First photon: " + str(data.photons[0].unbary))
         #print("Last photon: " + str(data.photons[-1].unbary))
         print("start time: " + str(s-data.t0))
         if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
             try:
-                b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
+                if blen is None:
+                    b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
                                    pcus = data.pcus)
+                else:
+                    b = rxte.RXTEBurst(s, blen, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
+                                   pcus = data.pcus)
+
                 b.ps_corr = b.deadtime_correction(std1dir=datafile[:-(len_datafile+len_processed+1)])
                 b.save_burst(fileroot + "_" + str(s) + "_burst.dat")
             except rxte.ZeroCountsException:
@@ -99,7 +111,8 @@ def make_bursts(datafile, bursttimefile, bary=True, fileroot="test"):
     return
 
 
-def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.dat"):
+def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.dat", tstart_min=None,
+               tstart_max = None, blen = None):
 
     filenames = search_filenames_recursively(datadir, data_expression)
     for f in filenames:
@@ -108,7 +121,8 @@ def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.da
         flen = len(fsplit[-1])
         fdir = f[:-flen]
         print("froot: " + str(froot))
-        make_bursts(f, bursttimefile, fileroot=fdir+froot)
+        make_bursts(f, bursttimefile, fileroot=fdir+froot, tstart_min=tstart_min, tstart_max=tstart_max,
+                    blen=blen)
 
     return
 
@@ -223,7 +237,7 @@ def main():
     if extract_bursts:
         print("Running all_bursts ...")
         assert clargs.bfile, "No file with burst start times!"
-        all_bursts(bursttimefile=clargs.bfile)
+        all_bursts(bursttimefile=clargs.bfile, blen=blen, tstart_min=tstart_min, tstart_max=tstart_max)
     if plot_lcs:
         plot_lightcurves()
 
@@ -251,6 +265,14 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--plot-lightcurves", action="store_true", dest='plot_lc',
                         help="Would you like to plot light curves to file?")
 
+    parser.add_argument("--tstart_min", action="store", dest="tstart_min", required=False,
+                        default=None, help="Minimum start time to pick out of file")
+
+    parser.add_argument("--tstart_max", action="store", dest="tstart_max", required=False,
+                        default=None, help="Maximum start time to pick out of file")
+
+    parser.add_argument("--blen", action="store", dest="blen", required=False,
+                        default=None, help="Burst length to force all bursts to have the same length")
 
     parser.add_argument("-a", "--analysis", action="store_true", dest="analysis",
                         help="Would you like to run the Bayesian PSD analysis on a bunch of files?")
@@ -273,4 +295,9 @@ if __name__ == "__main__":
     plot_lcs = clargs.plot_lc
     analysis = clargs.analysis
     fitmethod = clargs.fitmethod
+
+    tstart_min = clargs.tstart_min
+    tstart_max = clargs.tstart_max
+    blen = clargs.blen
     main()
+
