@@ -265,13 +265,13 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--plot-lightcurves", action="store_true", dest='plot_lc',
                         help="Would you like to plot light curves to file?")
 
-    parser.add_argument("--tstart_min", action="store", dest="tstart_min", required=False,
+    parser.add_argument("--tstart_min", action="store", dest="tstart_min", required=False, type=float,
                         default=None, help="Minimum start time to pick out of file")
 
-    parser.add_argument("--tstart_max", action="store", dest="tstart_max", required=False,
+    parser.add_argument("--tstart_max", action="store", dest="tstart_max", required=False, type=float,
                         default=None, help="Maximum start time to pick out of file")
 
-    parser.add_argument("--blen", action="store", dest="blen", required=False,
+    parser.add_argument("--blen", action="store", dest="blen", required=False, type=float,
                         default=None, help="Burst length to force all bursts to have the same length")
 
     parser.add_argument("-a", "--analysis", action="store_true", dest="analysis",
