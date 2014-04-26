@@ -78,7 +78,8 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
     #print("bary: " + str(bary))
     #print("all photons, unbarycentered: " + str([p.unbary for p in data.photons]))
 
-    tstart, blen = read_burst_times(bursttimefile)
+    tstart, blen_file = read_burst_times(bursttimefile)
+
 
     print("tstart_min: %f" %tstart_min)
     print("tstart_max: %f" %tstart_max)
@@ -88,8 +89,16 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
         minind = np.array(tstart).searchsorted(tstart_min)
         maxind = np.array(tstart).searchsorted((tstart_max))
         tstart = tstart[minind:maxind]
-        blen = blen[minind:maxind]
+        blen_file = blen_file[minind:maxind]
 
+        print("minind: %i" %minind)
+        print("maxind: %i" %maxind)
+
+
+    if blen is None:
+        blen = blen_file
+    else:
+        blen = [blen for i in xrange(len(tstart))]
 
     for i,(s,l) in enumerate(zip(tstart, blen)):
         #print("First photon: " + str(data.photons[0].unbary))
@@ -97,11 +106,7 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
         print("start time: " + str(s-data.t0))
         if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
             try:
-                if blen is None:
-                    b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
-                                   pcus = data.pcus)
-                else:
-                    b = rxte.RXTEBurst(s, blen, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
+                b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
                                    pcus = data.pcus)
 
                 b.ps_corr = b.deadtime_correction(std1dir=datafile[:-(len_datafile+len_processed+1)])
@@ -124,6 +129,7 @@ def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.da
         froot = fsplit[1]
         flen = len(fsplit[-1])
         fdir = f[:-flen]
+        print("filename: %s" %f)
         print("froot: " + str(froot))
         make_bursts(f, bursttimefile, fileroot=fdir+froot, tstart_min=tstart_min, tstart_max=tstart_max,
                     blen=blen)
