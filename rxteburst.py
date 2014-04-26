@@ -80,6 +80,10 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
 
     tstart, blen = read_burst_times(bursttimefile)
 
+    print("tstart_min: %f" %tstart_min)
+    print("tstart_max: %f" %tstart_max)
+    print("blen: %f" %blen)
+
     if not tstart_min is None and not tstart_max is None:
         minind = np.array(tstart).searchsorted(tstart_min)
         maxind = np.array(tstart).searchsorted((tstart_max))
