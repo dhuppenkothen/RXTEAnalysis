@@ -9,13 +9,6 @@ import argparse
 #import scipy.optimize
 #import scipy
 import glob
-import findbursts
-
-try:
-    import xbblocks
-except ImportError:
-    print("You need to have the xbblocks script from Peter Williams' pwpy repository in "
-          "order to find bursts!")
 
 
 import matplotlib
@@ -34,16 +27,15 @@ except ImportError:
     print("Module Burst not found!")
 
 import rxte
-import findbursts
 
 
-def search_filenames_recursively(testdir, testexpression):
-    matches = []
-    for root, dirnames, filenames in os.walk(testdir):
-        for filename in fnmatch.filter(filenames, testexpression):
-            matches.append(os.path.join(root, filename))
-
-    return matches
+#def search_filenames_recursively(testdir, testexpression):
+#    matches = []
+#    for root, dirnames, filenames in os.walk(testdir):
+#        for filename in fnmatch.filter(filenames, testexpression):
+#            matches.append(os.path.join(root, filename))
+#
+#    return matches
 
 
 
@@ -213,7 +205,7 @@ def plot_lightcurves(datadir="./", plot_ps = True):
 
 def bayesian_analysis(nwalker=500, niter=200, nsim=1000, fnyquist=2048.0, fitmethod='powell', datadir="./", froot="test"):
 
-    logfile = findbursts.TwoPrint(datadir + "sgr1900_bayesiananalysis.dat")
+    logfile = gt.TwoPrint(datadir + "sgr1900_bayesiananalysis.dat")
 
     filenames = glob.glob(datadir + froot + "*burst.dat")
 
