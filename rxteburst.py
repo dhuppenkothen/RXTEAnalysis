@@ -103,13 +103,14 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
     for i,(s,l) in enumerate(zip(tstart, blen)):
         #print("First photon: " + str(data.photons[0].unbary))
         #print("Last photon: " + str(data.photons[-1].unbary))
-        print("start time: " + str(s-data.t0))
+        #print("start time: " + str(s-data.t0))
         if data.photons[0].unbary <= s-data.t0 <= data.photons[-1].unbary:
             try:
                 b = rxte.RXTEBurst(s, l, data.photons, data.t0, bary=bary, add_frac=0.2, fnyquist=2048.0, norm="leahy",
                                    pcus = data.pcus)
 
                 b.ps_corr = b.deadtime_correction(std1dir=datafile[:-(len_datafile+len_processed+1)])
+                print("Saving burst in " + fileroot + "_" + str(s) + "_burst.dat")
                 b.save_burst(fileroot + "_" + str(s) + "_burst.dat")
             except rxte.ZeroCountsException:
                 print("No counts in burst!")
@@ -121,14 +122,15 @@ def make_bursts(datafile, bursttimefile, tstart_min=None, tstart_max = None, bar
 
 
 def all_bursts(datadir = "./", data_expression="*.asc", bursttimefile="bursts.dat", tstart_min=None,
-               tstart_max = None, blen = None):
+               tstart_max = None, blen = None, fdir=None):
 
     filenames = search_filenames_recursively(datadir, data_expression)
     for f in filenames:
         fsplit = f.split("/")
-        froot = fsplit[1]
+        froot = fsplit[-3]
         flen = len(fsplit[-1])
-        fdir = f[:-flen]
+        if fdir is None:
+            fdir = f[:-flen]
         print("filename: %s" %f)
         print("froot: " + str(froot))
         make_bursts(f, bursttimefile, fileroot=fdir+froot, tstart_min=tstart_min, tstart_max=tstart_max,

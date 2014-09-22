@@ -233,18 +233,18 @@ class RXTEBurst(burst.Burst, object):
 
         self.ttrig = ttrig
 
-        print("self.bst: " + str(self.bst))
+        #print("self.bst: " + str(self.bst))
         print("self.blen: " + str(self.blen))
-        print("self.bend: " + str(self.bend))
-        print("calculated blen: " + str(self.bend - self.bst))
+        #print("self.bend: " + str(self.bend))
+        #print("calculated blen: " + str(self.bend - self.bst))
 
         if bary:
             times = np.array([p.unbary for p in photons]) + self.ttrig
         else:
             times = np.array([p.time for p in photons]) + self.ttrig
 
-        print("times[0]: " + str(times[0]))
-        print("times[-1]: " + str(times[-1]))
+        #print("times[0]: " + str(times[0]))
+        #print("times[-1]: " + str(times[-1]))
 
         startind = times.searchsorted(self.bst)
         endind = times.searchsorted(self.bend)
@@ -255,17 +255,17 @@ class RXTEBurst(burst.Burst, object):
             else:
                 self.pcus = pcus
 
-        print("startind: " + str(startind))
-        print("endind: " + str(endind))
-        print("len photons: " + str(len(photons)))
+        #print("startind: " + str(startind))
+        #print("endind: " + str(endind))
+        #print("len photons: " + str(len(photons)))
 
         self.photons = photons[startind:endind]
-        print("len photons: " + str(len(self.photons)))
+        #print("len photons: " + str(len(self.photons)))
         if startind == endind:
             raise ZeroCountsException(0)
 
         self.times = np.array([p.time for p in self.photons])
-        print("len times: " + str(len(self.times)))
+        #print("len times: " + str(len(self.times)))
         self.lc = lightcurve.Lightcurve(self.times, timestep=0.5/fnyquist, tseg=self.blen)
         self.ps = powerspectrum.PowerSpectrum(self.lc, norm=norm)
 
