@@ -7,7 +7,7 @@ import numpy as np
 import cPickle as pickle
 import copy
 
-import pyfits
+import astropy.io.fits as pyfits
 
 import burst
 import generaltools
